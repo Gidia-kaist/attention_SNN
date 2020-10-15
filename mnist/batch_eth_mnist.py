@@ -13,12 +13,14 @@ from time import time as t
 
 from bindsnet.datasets import MNIST, DataLoader
 from bindsnet.encoding import PoissonEncoder
+from bindsnet.encoding import poisson
 from bindsnet.evaluation import all_activity, proportion_weighting, assign_labels
 from bindsnet.models import DiehlAndCook2015
 from bindsnet.network.monitors import Monitor
 from bindsnet.utils import get_square_weights
 from bindsnet.analysis.plotting import plot_spikes, plot_weights
 from bindsnet.shared_preference import SharedPreference
+
 global seed_weight
 global seed_weight_bf
 global seed_weight_now
@@ -48,8 +50,8 @@ parser.add_argument("--nu_pair", type=float, default=1e-2)
 parser.add_argument("--gpu", dest="gpu", action="store_true")
 parser.add_argument("--final_stage", type=int, default=300)
 parser.add_argument("--error_range", type=float, default=0.40)
+parser.add_argument("--attention", type=bool, default=True)
 parser.set_defaults(plot=False, gpu=True, train=True, sparse=False, error=False)
-
 
 args = parser.parse_args()
 
@@ -80,19 +82,19 @@ error = args.error
 final_stage_num = args.final_stage
 update_interval = update_steps * batch_size
 now = datetime.now()
-
+attention = args.attention
 
 filter_mask = True
 doc_count = 1
 G_max = 0.5388
 G_min = 0.2388
-ap=18.89
-ad=10.18
-bp=0.3216
-bd=0.302
+ap = 18.89
+ad = 10.18
+bp = 0.3216
+bd = 0.302
 Gaft = None
 Gbef = None
-Gr = G_max-G_min
+Gr = G_max - G_min
 T = 0
 
 # Sets up Gpu use
@@ -102,7 +104,7 @@ if gpu and torch.cuda.is_available():
 else:
     torch.manual_seed(seed)
 
-print("device count : "+ str(torch.cuda.device_count()))
+print("device count : " + str(torch.cuda.device_count()))
 
 # Determines number of workers to use
 if n_workers == -1:
@@ -131,8 +133,29 @@ if gpu:
     print('Connected "Network" to CUDA')
 
 # Load MNIST data.
+
+
+if attention is True:
+    dataset = MNIST(
+        None,
+        root=os.path.join("..", "data", "MNIST"),
+        download=True,
+        transform=transforms.Compose(
+            [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        ),
+    )
+else:
+    dataset = MNIST(
+        PoissonEncoder(time=time, dt=dt),
+        None,
+        root=os.path.join("..", "data", "MNIST"),
+        download=True,
+        transform=transforms.Compose(
+            [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+        ),
+    )
+'''
 dataset = MNIST(
-    PoissonEncoder(time=time, dt=dt),
     None,
     root=os.path.join("..", "data", "MNIST"),
     download=True,
@@ -140,6 +163,14 @@ dataset = MNIST(
         [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
     ),
 )
+
+
+
+dataset = poisson(dataset, time=time, dt=dt)
+dataset = dataset.transforms.Compose(
+        [transforms.ToTensor(), transforms.Lambda(lambda x: x * intensity)]
+    )
+'''
 # Neuron assignments and spike proportions.
 n_classes = 10
 assignments = -torch.ones(n_neurons)
@@ -195,8 +226,8 @@ csv_data_weight = []
 h = network.connections[("X", "Ae")].w.cpu()
 k = h.numpy()
 dfw = pd.DataFrame(k)
-dfw.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/weight[init]_'+ str(now.year) + '_' + str(
-        now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(now.minute) + '.csv', index=False)
+dfw.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/weight[init]_' + str(now.year) + '_' + str(
+    now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(now.minute) + '.csv', index=False)
 
 if error:
     SharedPreference.set_error_on(SharedPreference, True)
@@ -208,6 +239,7 @@ for epoch in range(n_epochs):
         start = t()
 
     # Create a dataloader to iterate and batch data
+
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -217,31 +249,54 @@ for epoch in range(n_epochs):
     )
 
     for step, batch in enumerate(tqdm(dataloader)):
-        # Get next input sample.
-        inpts = {"X": batch["encoded_image"]}
+        # NEED :
+
+
+        #
+        # inpts_bf = {"X": batch["encoded_image"]}
+        # inpts dim : encoding O = time, batch, 1, 28, 28
+        # inpts dim : encoding X = 1, batch, 28, 28
+        if attention is True:
+            # 1. Attention calculation
+            # 1-1. Loop for 784 pixel
+            # 1-2. Load weight matrix & softmax
+            # 1-3. Calcualte Attention score
+            weight_matrix = network.connections[("X", "Ae")].w.cpu()
+            print(batch["encoded_image"].shape)
+
+            # 2. Dynamic Poisson encoding
+            batch["encoded_image"] = batch["encoded_image"].permute(1, 0, 2, 3)
+            a = poisson(batch["encoded_image"][0], time=time, dt=dt).unsqueeze(0)
+            for i in range(batch_size - 1):
+                temp = poisson(batch["encoded_image"][i + 1], time=time, dt=dt).unsqueeze(0)
+                a = torch.cat((a, temp))
+            a = a.permute(1, 0, 2, 3, 4)
+            # print(a.shape)
+            # batch["encoded_image"] = poisson(batch["encoded_image"], time=time, dt=dt)
+            # Get next input sample.
+            inpts = {"X": a}
+        else:
+            inpts = {"X": batch["encoded_image"]}
 
         if gpu:
             inpts = {k: v.cuda() for k, v in inpts.items()}
-
-
 
         if step % update_steps == 0 and step > 0:
 
             # Convert the array of labels into a tensor
             label_tensor = torch.tensor(labels)
-            #print("Input count :" + str(SharedPreference.get_count(SharedPreference, 1)))
-            #print("exc to inh count :" + str(SharedPreference.get_count(SharedPreference, 2)))
-            #print("inh to exc count :" + str(SharedPreference.get_count(SharedPreference, 3)))
+            # print("Input count :" + str(SharedPreference.get_count(SharedPreference, 1)))
+            # print("exc to inh count :" + str(SharedPreference.get_count(SharedPreference, 2)))
+            # print("inh to exc count :" + str(SharedPreference.get_count(SharedPreference, 3)))
             # Get network predictions.
-            #print(spike_record.size())
+            # print(spike_record.size())
             all_activity_pred = all_activity(
                 spikes=spike_record, assignments=assignments, n_labels=n_classes
             )
 
-
-            #print(all_activity_pred.size())
-            #print(assignments.size())
-            #print(label_tensor.long().size())
+            # print(all_activity_pred.size())
+            # print(assignments.size())
+            # print(label_tensor.long().size())
             proportion_pred = proportion_weighting(
                 spikes=spike_record,
                 assignments=assignments,
@@ -279,39 +334,9 @@ for epoch in range(n_epochs):
                     np.max(accuracy["proportion"]),
                 )
             )
-            #Calculation
-            Gaft = network.connections[("X", "Ae")].w.cpu()*0.3 + G_min
+            # Calculation
+            Gaft = network.connections[("X", "Ae")].w.cpu() * 0.3 + G_min
             print("NODE_1")
-            print(Gaft)
-            if Gbef is not None:
-                print("NODE_2")
-                Tp_aft = -ap * np.log(1 - (Gaft - G_min) / bp)
-                Tp_bef = -ap * np.log(1 - (Gbef - G_min) / bp)
-                Td_aft = -50 - ad * np.log(1 + (Gaft - G_min) / bd) + 51
-                Td_bef = -50 - ad * np.log(1 + (Gbef - G_min) / bd) + 51
-
-                #Potentiation
-                Tp = Tp_aft - Tp_bef
-                Tp_aft[Tp < 0] = 0
-                Tp_bef[Tp < 0] = 0
-                Ep = ap*bp*(np.exp(-Tp_aft/ap)-np.exp(-Tp_bef))-(bp+G_min)*(Tp_bef-Tp_aft)
-                ap * bp * (np.exp(-Tp_aft / ap) - np.exp(-Tp_bef)) - (bp + G_min) * (Tp_bef - Tp_aft)
-                print("Ep: "+str(Ep))
-                #Depression
-                Td = Td_aft - Td_bef
-                Td_aft[Td < 0] = 0
-                Td_bef[Td < 0] = 0
-                Ed = ad*bd*np.exp(1/ad)*(np.exp(-Td_aft/ad)-np.exp(-Td_bef/ad))-(bd+G_min)*(Td_bef-Td_aft)
-                print("Ed: "+str(Ed))
-                #Summation
-                Ef = Ep + Ed
-                E = Ef.sum()
-                print(E)
-                alist.append(E.numpy())
-                print("NODE_3")
-
-                dfw = pd.DataFrame(alist)
-                dfw.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/E_Training.csv', index=False)
 
             # Weight 값 내보내기
             h = network.connections[("X", "Ae")].w.cpu()
@@ -329,8 +354,8 @@ for epoch in range(n_epochs):
                 n_labels=n_classes,
                 rates=rates,
             )
-            #print(assignments.size())
-            #print(all_activity_pred.size())
+            # print(assignments.size())
+            # print(all_activity_pred.size())
             if sparse:
                 if mark_final == False and count <= final_stage_num:
                     if count == 1:
@@ -346,11 +371,13 @@ for epoch in range(n_epochs):
                             temp_count += 1
                             i = j.item()
                             if check_list[i] == 1:
-                                if abs(max(network.connections[("X", "Ae")].w[:, i]) - min(network.connections[("X", "Ae")].w[:, i])) > connectivity:
+                                if abs(max(network.connections[("X", "Ae")].w[:, i]) - min(
+                                        network.connections[("X", "Ae")].w[:, i])) > connectivity:
                                     # set connectivity of inpts to exc as ZERO(FALSE)
                                     SharedPreference.set_boolean_mask(SharedPreference, i, 0)
                                     # set connectivity of inh to exc as ZERO(FALSE)
-                                    SharedPreference.set_copy(SharedPreference, target=network.connections[("X", "Ae")].w, col=i)
+                                    SharedPreference.set_copy(SharedPreference,
+                                                              target=network.connections[("X", "Ae")].w, col=i)
                                     network.connections[("X", "Ae")].w[:, i] = 0
                                     mark_save = True
                                     # print(network.connections[("X", "Ae")].w)
@@ -373,30 +400,24 @@ for epoch in range(n_epochs):
                 elif mark_final == True and count > final_stage_num:
                     print("\nFinal_Stage__")
 
+                # if mark_save == True:
 
-                #if mark_save == True:
-
-                    #df = pd.DataFrame(csv_datas_conn, columns=['Connectivity'])
-                    #df.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/conn_' + str(count) + "_" + str(now.year) + '_'
-                    #          + str( now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(now.minute) + '.csv', index=False)
-                    #mark_save = False
+                # df = pd.DataFrame(csv_datas_conn, columns=['Connectivity'])
+                # df.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/conn_' + str(count) + "_" + str(now.year) + '_'
+                #          + str( now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(now.minute) + '.csv', index=False)
+                # mark_save = False
             count += 1
-            #print(assignments[0:80])
-            #print(SharedPreference.get_boolean_mask(SharedPreference))
+            # print(assignments[0:80])
+            # print(SharedPreference.get_boolean_mask(SharedPreference))
             labels = []
             print("NODE_4")
-            Gbef = network.connections[("X", "Ae")].w.cpu()*0.3 + G_min
-            print(Gbef)
+            Gbef = network.connections[("X", "Ae")].w.cpu() * 0.3 + G_min
         labels.extend(batch["label"].tolist())
-
-
-
 
         # Run the network on the input.
         SharedPreference.initialize_count(SharedPreference)
-        print(inpts.shape)
+        # print(inpts.shape)
         network.run(inpts=inpts, time=time, input_time_dim=1)
-
 
         # Add to spikes recording.
 
@@ -407,12 +428,11 @@ for epoch in range(n_epochs):
                            + s.size(0)
         ] = s
 
-
         # print(s.size())
-        #print("\n")
-        #print(spikes["Ae"].get("s").sum())
-        #print(s.size())
-        #print(spike_record.size())
+        # print("\n")
+        # print(spikes["Ae"].get("s").sum())
+        # print(s.size())
+        # print(spike_record.size())
         # Get voltage recording.
         exc_voltages = exc_voltage_monitor.get("v")
         inh_voltages = inh_voltage_monitor.get("v")
@@ -451,11 +471,4 @@ for epoch in range(n_epochs):
         network.reset_()  # Reset state variables.
     print("Progress: %d / %d (%.4f seconds)" % (epoch + 1, n_epochs, t() - start))
 
-
-
 print("Training complete.\n")
-
-
-
-
-

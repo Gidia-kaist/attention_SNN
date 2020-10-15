@@ -101,7 +101,9 @@ def poisson(datum: torch.Tensor, time: int, dt: float = 1.0, **kwargs) -> torch.
 
     # Get shape and size of data.
     shape, size = datum.shape, datum.numel()
+    # print(datum.shape)
     datum = datum.view(-1)
+    # print(datum.shape)
     time = int(time / dt)
 
     # Compute firing rates in seconds as function of data intensity,
@@ -123,7 +125,8 @@ def poisson(datum: torch.Tensor, time: int, dt: float = 1.0, **kwargs) -> torch.
     spikes = torch.zeros(time + 1, size).byte()
     spikes[times, torch.arange(size)] = 1
     spikes = spikes[1:]
-
+    #print(spikes.shape)
+    #print(spikes.view(time, *shape).shape)
     return spikes.view(time, *shape)
 
 
