@@ -21,7 +21,7 @@ class LearningRule(ABC):
     """
     Abstract base class for learning rules.
     """
-    print("Node_1_!!!")
+    #print("Node_1_!!!")
     def __init__(
         self,
         connection: AbstractConnection,
@@ -75,7 +75,7 @@ class LearningRule(ABC):
         # Implement weight decay.
         if self.weight_decay:
             self.connection.w -= self.weight_decay * self.connection.w
-            print("Node_2!!!")
+            #print("Node_2!!!")
         # Bound weights.
         if (
             self.connection.wmin != -np.inf or self.connection.wmax != np.inf

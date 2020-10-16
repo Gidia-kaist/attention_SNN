@@ -136,7 +136,7 @@ class DiehlAndCook2015(Network):
             n=self.n_inpt, shape=self.inpt_shape, traces=True, tc_trace=20.0
         )
 
-        print(n_neurons)
+        #print(n_neurons)
         exc_layer = DiehlAndCookNodes(
             n=self.n_neurons,
             traces=True,

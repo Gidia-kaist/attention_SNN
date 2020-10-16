@@ -7,6 +7,7 @@ import pickle
 from torchvision import transforms
 from tqdm import tqdm
 
+
 import pandas as pd
 from datetime import datetime
 from time import time as t
@@ -34,7 +35,7 @@ parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--n_epochs", type=int, default=5)
 parser.add_argument("--n_test", type=int, default=10000)
 parser.add_argument("--n_workers", type=int, default=-1)
-parser.add_argument("--update_steps", type=int, default=10)
+parser.add_argument("--update_steps", type=int, default=500)
 parser.add_argument("--exc", type=float, default=22.5)
 parser.add_argument("--inh", type=float, default=120)
 parser.add_argument("--theta_plus", type=float, default=0.05)
@@ -50,7 +51,7 @@ parser.add_argument("--nu_pair", type=float, default=1e-2)
 parser.add_argument("--gpu", dest="gpu", action="store_true")
 parser.add_argument("--final_stage", type=int, default=300)
 parser.add_argument("--error_range", type=float, default=0.40)
-parser.add_argument("--attention", type=bool, default=True)
+parser.add_argument("--attention", type=int, default=1)
 parser.set_defaults(plot=False, gpu=True, train=True, sparse=False, error=False)
 
 args = parser.parse_args()
@@ -83,7 +84,7 @@ final_stage_num = args.final_stage
 update_interval = update_steps * batch_size
 now = datetime.now()
 attention = args.attention
-
+print("using attention : ", attention)
 filter_mask = True
 doc_count = 1
 G_max = 0.5388
@@ -96,6 +97,7 @@ Gaft = None
 Gbef = None
 Gr = G_max - G_min
 T = 0
+
 
 # Sets up Gpu use
 if gpu and torch.cuda.is_available():
@@ -135,7 +137,8 @@ if gpu:
 # Load MNIST data.
 
 
-if attention is True:
+if attention is 1:
+    print("attention = 1")
     dataset = MNIST(
         None,
         root=os.path.join("..", "data", "MNIST"),
@@ -145,6 +148,7 @@ if attention is True:
         ),
     )
 else:
+    print("attention = 0")
     dataset = MNIST(
         PoissonEncoder(time=time, dt=dt),
         None,
@@ -256,16 +260,34 @@ for epoch in range(n_epochs):
         # inpts_bf = {"X": batch["encoded_image"]}
         # inpts dim : encoding O = time, batch, 1, 28, 28
         # inpts dim : encoding X = 1, batch, 28, 28
-        if attention is True:
+        if attention is 1:
             # 1. Attention calculation
             # 1-1. Loop for 784 pixel
             # 1-2. Load weight matrix & softmax
             # 1-3. Calcualte Attention score
-            weight_matrix = network.connections[("X", "Ae")].w.cpu()
-            print(batch["encoded_image"].shape)
-
-            # 2. Dynamic Poisson encoding
             batch["encoded_image"] = batch["encoded_image"].permute(1, 0, 2, 3)
+
+            #print("bef: ", batch["encoded_image"].shape)
+            input_dataset = batch["encoded_image"].squeeze(1)
+
+            for b in range(batch_size):
+                weight_matrix = network.connections[("X", "Ae")].w.cpu()
+                query = input_dataset[b].view(1, 784)
+                #print("1: ", weight_matrix.shape)
+                #print("2: ",input_dataset[b].view(1, 784).shape)
+                #print("3: ",torch.argmax(torch.matmul(input_dataset[b].view(1, 784), weight_matrix)))
+                index = torch.argmax(torch.matmul(query, weight_matrix))
+                softmax = torch.nn.Softmax(dim=1)
+                attention_score = softmax(torch.mul(query, weight_matrix[:, index]))
+                #print(attention_score.shape)
+                #print(torch.sum(attention_score))
+                input_dataset[b] = (torch.round(torch.mul(query, attention_score)*10**4)/10**4).reshape(28, 28)
+                #print(input_dataset[b])
+            batch["encoded_image"] = input_dataset.unsqueeze(1)
+            # print(batch["encoded_image"].shape)
+            #print("aft: ", batch["encoded_image"].shape)
+            # 2. Dynamic Poisson encoding
+
             a = poisson(batch["encoded_image"][0], time=time, dt=dt).unsqueeze(0)
             for i in range(batch_size - 1):
                 temp = poisson(batch["encoded_image"][i + 1], time=time, dt=dt).unsqueeze(0)
@@ -325,6 +347,7 @@ for epoch in range(n_epochs):
                     np.mean(accuracy["all"]),
                     np.max(accuracy["all"]),
                 )
+
             )
             print(
                 "Proportion weighting accuracy: %.2f (last), %.2f (average), %.2f (best)\n"
@@ -336,7 +359,7 @@ for epoch in range(n_epochs):
             )
             # Calculation
             Gaft = network.connections[("X", "Ae")].w.cpu() * 0.3 + G_min
-            print("NODE_1")
+            #print("NODE_1")
 
             # Weight 값 내보내기
             h = network.connections[("X", "Ae")].w.cpu()
@@ -410,7 +433,7 @@ for epoch in range(n_epochs):
             # print(assignments[0:80])
             # print(SharedPreference.get_boolean_mask(SharedPreference))
             labels = []
-            print("NODE_4")
+            #print("NODE_4")
             Gbef = network.connections[("X", "Ae")].w.cpu() * 0.3 + G_min
         labels.extend(batch["label"].tolist())
 
