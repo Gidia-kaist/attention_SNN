@@ -2,9 +2,9 @@ from abc import ABC, abstractmethod
 from functools import reduce
 from operator import mul
 from typing import Iterable, Optional, Union
-import pandas as pd
+
 import torch
-from bindsnet.shared_preference import SharedPreference
+
 
 class Nodes(torch.nn.Module):
     # language=rst
@@ -27,6 +27,7 @@ class Nodes(torch.nn.Module):
         # language=rst
         """
         Abstract base class constructor.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record decaying spike traces.
@@ -58,8 +59,8 @@ class Nodes(torch.nn.Module):
 
         self.traces = traces  # Whether to record synaptic traces.
         self.traces_additive = (
-            traces_additive
-        )  # Whether to record spike traces additively.
+            traces_additive  # Whether to record spike traces additively.
+        )
         self.register_buffer("s", torch.ByteTensor())  # Spike occurrences.
 
         self.sum_input = sum_input  # Whether to sum all inputs.
@@ -81,6 +82,8 @@ class Nodes(torch.nn.Module):
             self.register_buffer("summed", torch.FloatTensor())  # Summed inputs.
 
         self.dt = None
+        self.batch_size = None
+        self.trace_decay = None
         self.learning = learning
 
     @abstractmethod
@@ -88,9 +91,9 @@ class Nodes(torch.nn.Module):
         # language=rst
         """
         Abstract base class method for a single simulation step.
+
         :param x: Inputs to the layer.
         """
-
         if self.traces:
             # Decay and set spike traces.
             self.x *= self.trace_decay
@@ -104,8 +107,7 @@ class Nodes(torch.nn.Module):
             # Add current input to running sum.
             self.summed += x.float()
 
-
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Abstract base class method for resetting state variables.
@@ -133,6 +135,7 @@ class Nodes(torch.nn.Module):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         self.batch_size = batch_size
@@ -150,6 +153,7 @@ class Nodes(torch.nn.Module):
         # language=rst
         """
         Sets the layer in training mode.
+
         :param bool mode: Turn training on or off
         :return: self as specified in `torch.nn.Module`
         """
@@ -184,6 +188,7 @@ class Input(Nodes, AbstractInput):
         # language=rst
         """
         Instantiates a layer of input neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record decaying spike traces.
@@ -203,81 +208,23 @@ class Input(Nodes, AbstractInput):
         )
 
     def forward(self, x: torch.Tensor) -> None:
-
         # language=rst
         """
         On each simulation step, set the spikes of the population equal to the inputs.
+
         :param x: Inputs to the layer.
         """
         # Set spike occurrences to input values.
-        self.s = x.byte()
+        self.s = x
 
         super().forward(x)
 
-
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
-
-
-class RealInput(Nodes, AbstractInput):
-    # language=rst
-    """
-    Layer of nodes with user-specified real-valued outputs.
-    """
-
-    def __init__(
-        self,
-        n: Optional[int] = None,
-        shape: Optional[Iterable[int]] = None,
-        traces: bool = False,
-        traces_additive: bool = False,
-        tc_trace: Union[float, torch.Tensor] = 20.0,
-        trace_scale: Union[float, torch.Tensor] = 1.0,
-        sum_input: bool = False,
-        **kwargs,
-    ) -> None:
-        # language=rst
-        """
-        Instantiates a layer of input neurons.
-        :param n: The number of neurons in the layer.
-        :param shape: The dimensionality of the layer.
-        :param traces: Whether to record decaying spike traces.
-        :param traces_additive: Whether to record spike traces additively.
-        :param tc_trace: Time constant of spike trace decay.
-        :param trace_scale: Scaling factor for spike trace.
-        :param sum_input: Whether to sum all inputs.
-        """
-        super().__init__(
-            n=n,
-            shape=shape,
-            traces=traces,
-            traces_additive=traces_additive,
-            tc_trace=tc_trace,
-            trace_scale=trace_scale,
-            sum_input=sum_input,
-        )
-
-    def forward(self, x: torch.Tensor) -> None:
-        # language=rst
-        """
-        On each simulation step, set the outputs of the population equal to the inputs.
-        :param x: Inputs to the layer.
-        """
-        # Set spike occurrences to input values.
-        self.s = self.dt * x
-
-        super().forward(x)
-
-    def reset_(self) -> None:
-        # language=rst
-        """
-        Resets relevant state variables.
-        """
-        super().reset_()
+        super().reset_state_variables()
 
 
 class McCullochPitts(Nodes):
@@ -302,6 +249,7 @@ class McCullochPitts(Nodes):
         # language=rst
         """
         Instantiates a McCulloch-Pitts layer of neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -330,6 +278,7 @@ class McCullochPitts(Nodes):
         # language=rst
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         self.v = x  # Voltages are equal to the inputs.
@@ -337,17 +286,18 @@ class McCullochPitts(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
 
     def set_batch_size(self, batch_size) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -378,6 +328,7 @@ class IFNodes(Nodes):
         # language=rst
         """
         Instantiates a layer of IF neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -418,18 +369,16 @@ class IFNodes(Nodes):
 
     def forward(self, x: torch.Tensor) -> None:
         # language=rst
-
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Integrate input voltages.
-        self.v += (self.refrac_count == 0).float() * x
+        self.v += (self.refrac_count <= 0).float() * x
 
         # Decrement refractory counters.
-        self.refrac_count = (self.refrac_count > 0).float() * (
-            self.refrac_count - self.dt
-        )
+        self.refrac_count -= self.dt
 
         # Check for spiking neurons.
         self.s = self.v >= self.thresh
@@ -444,12 +393,12 @@ class IFNodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.reset)  # Neuron voltages.
         self.refrac_count.zero_()  # Refractory period counters.
 
@@ -457,6 +406,7 @@ class IFNodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -491,6 +441,7 @@ class LIFNodes(Nodes):
         # language=rst
         """
         Instantiates a layer of LIF neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -528,7 +479,7 @@ class LIFNodes(Nodes):
             "refrac", torch.tensor(refrac)
         )  # Post-spike refractory period.
         self.register_buffer(
-            "tc_decay", torch.tensor(tc_decay)
+            "tc_decay", torch.tensor(tc_decay, dtype=torch.float)
         )  # Time constant of neuron voltage decay.
         self.register_buffer(
             "decay", torch.zeros(*self.shape)
@@ -538,25 +489,30 @@ class LIFNodes(Nodes):
             "refrac_count", torch.FloatTensor()
         )  # Refractory period counters.
 
-        self.lbound = lbound  # Lower bound of voltage.
+        if lbound is None:
+            self.lbound = None  # Lower bound of voltage.
+        else:
+            self.lbound = torch.tensor(
+                lbound, dtype=torch.float
+            )  # Lower bound of voltage.
 
     def forward(self, x: torch.Tensor) -> None:
         # language=rst
-
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Decay voltages.
         self.v = self.decay * (self.v - self.rest) + self.rest
 
         # Integrate inputs.
-        self.v += (self.refrac_count == 0).float() * x
-
+        x.masked_fill_(self.refrac_count > 0, 0.0)
+        
         # Decrement refractory counters.
-        self.refrac_count = (self.refrac_count > 0).float() * (
-            self.refrac_count - self.dt
-        )
+        self.refrac_count -= self.dt
+
+        self.v += x  # interlaced
 
         # Check for spiking neurons.
         self.s = self.v >= self.thresh
@@ -571,12 +527,12 @@ class LIFNodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.rest)  # Neuron voltages.
         self.refrac_count.zero_()  # Refractory period counters.
 
@@ -594,6 +550,7 @@ class LIFNodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -686,6 +643,7 @@ class CurrentLIFNodes(Nodes):
         # language=rst
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Decay voltages and current.
@@ -693,13 +651,11 @@ class CurrentLIFNodes(Nodes):
         self.i *= self.i_decay
 
         # Decrement refractory counters.
-        self.refrac_count = (self.refrac_count > 0).float() * (
-            self.refrac_count - self.dt
-        )
+        self.refrac_count -= self.dt
 
         # Integrate inputs.
         self.i += x
-        self.v += (self.refrac_count == 0).float() * self.i
+        self.v += (self.refrac_count <= 0).float() * self.i
 
         # Check for spiking neurons.
         self.s = self.v >= self.thresh
@@ -714,12 +670,12 @@ class CurrentLIFNodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.rest)  # Neuron voltages.
         self.i.zero_()  # Synaptic input currents.
         self.refrac_count.zero_()  # Refractory period counters.
@@ -741,6 +697,7 @@ class CurrentLIFNodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -778,6 +735,7 @@ class AdaptiveLIFNodes(Nodes):
         # language=rst
         """
         Instantiates a layer of LIF neurons with adaptive firing thresholds.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -814,7 +772,7 @@ class AdaptiveLIFNodes(Nodes):
             "tc_decay", torch.tensor(tc_decay)
         )  # Time constant of neuron voltage decay.
         self.register_buffer(
-            "decay", torch.empty_like(self.tc_decay)
+            "decay", torch.empty_like(self.tc_decay, dtype=torch.float32)
         )  # Set in compute_decays.
         self.register_buffer(
             "theta_plus", torch.tensor(theta_plus)
@@ -837,6 +795,7 @@ class AdaptiveLIFNodes(Nodes):
         # language=rst
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Decay voltages and adaptive thresholds.
@@ -845,12 +804,10 @@ class AdaptiveLIFNodes(Nodes):
             self.theta *= self.theta_decay
 
         # Integrate inputs.
-        self.v += (self.refrac_count == 0).float() * x
+        self.v += (self.refrac_count <= 0).float() * x
 
         # Decrement refractory counters.
-        self.refrac_count = (self.refrac_count > 0).float() * (
-            self.refrac_count - self.dt
-        )
+        self.refrac_count -= self.dt
 
         # Check for spiking neurons.
         self.s = self.v >= self.thresh + self.theta
@@ -867,12 +824,12 @@ class AdaptiveLIFNodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.rest)  # Neuron voltages.
         self.refrac_count.zero_()  # Refractory period counters.
 
@@ -893,6 +850,7 @@ class AdaptiveLIFNodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -930,6 +888,7 @@ class DiehlAndCookNodes(Nodes):
         # language=rst
         """
         Instantiates a layer of Diehl & Cook 2015 neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -988,11 +947,10 @@ class DiehlAndCookNodes(Nodes):
         self.one_spike = one_spike  # One spike per timestep.
 
     def forward(self, x: torch.Tensor) -> None:
-        #print(x)
-        #print(x.size())
         # language=rst
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Decay voltages and adaptive thresholds.
@@ -1001,14 +959,12 @@ class DiehlAndCookNodes(Nodes):
             self.theta *= self.theta_decay
 
         # Integrate inputs.
-        self.v += (self.refrac_count == 0).float() * x  # refrac 이 아닌 것만큼 inpts 값을 self.v 에 더해줌.
+        self.v += (self.refrac_count <= 0).float() * x
 
-        # Decrement refractory counters. refrac counter 를 감소하는 단계.
-        self.refrac_count = (self.refrac_count > 0).float() * (
-            self.refrac_count - self.dt
-        )
+        # Decrement refractory counters.
+        self.refrac_count -= self.dt
 
-        # Check for spiking neurons. self.v 부터 thresh 를 넘는 것을 따로 self.s 로 저장.
+        # Check for spiking neurons.
         self.s = self.v >= self.thresh + self.theta
 
         # Refractoriness, voltage reset, and adaptive thresholds.
@@ -1034,12 +990,12 @@ class DiehlAndCookNodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.rest)  # Neuron voltages.
         self.refrac_count.zero_()  # Refractory period counters.
 
@@ -1060,6 +1016,7 @@ class DiehlAndCookNodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -1091,6 +1048,7 @@ class IzhikevichNodes(Nodes):
         # language=rst
         """
         Instantiates a layer of Izhikevich neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -1188,6 +1146,7 @@ class IzhikevichNodes(Nodes):
         # language=rst
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Check for spiking neurons.
@@ -1215,12 +1174,12 @@ class IzhikevichNodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.rest)  # Neuron voltages.
         self.u = self.b * self.v  # Neuron recovery.
 
@@ -1228,6 +1187,7 @@ class IzhikevichNodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)
@@ -1265,6 +1225,7 @@ class SRM0Nodes(Nodes):
         # language=rst
         """
         Instantiates a layer of SRM0 neurons.
+
         :param n: The number of neurons in the layer.
         :param shape: The dimensionality of the layer.
         :param traces: Whether to record spike traces.
@@ -1322,13 +1283,14 @@ class SRM0Nodes(Nodes):
         # language=rst
         """
         Runs a single simulation step.
+
         :param x: Inputs to the layer.
         """
         # Decay voltages.
         self.v = self.decay * (self.v - self.rest) + self.rest
 
         # Integrate inputs.
-        self.v += (self.refrac_count == 0).float() * self.eps_0 * x
+        self.v += (self.refrac_count <= 0).float() * self.eps_0 * x
 
         # Compute (instantaneous) probabilities of spiking, clamp between 0 and 1 using exponentials.
         # Also known as 'escape noise', this simulates nearby neurons.
@@ -1336,9 +1298,7 @@ class SRM0Nodes(Nodes):
         self.s_prob = 1.0 - torch.exp(-self.rho * self.dt)
 
         # Decrement refractory counters.
-        self.refrac_count = (self.refrac_count > 0).float() * (
-            self.refrac_count - self.dt
-        )
+        self.refrac_count -= self.dt
 
         # Check for spiking neurons (spike when probability > some random number).
         self.s = torch.rand_like(self.s_prob) < self.s_prob
@@ -1353,12 +1313,12 @@ class SRM0Nodes(Nodes):
 
         super().forward(x)
 
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Resets relevant state variables.
         """
-        super().reset_()
+        super().reset_state_variables()
         self.v.fill_(self.rest)  # Neuron voltages.
         self.refrac_count.zero_()  # Refractory period counters.
 
@@ -1376,6 +1336,7 @@ class SRM0Nodes(Nodes):
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
+
         :param batch_size: Mini-batch size.
         """
         super().set_batch_size(batch_size=batch_size)

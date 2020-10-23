@@ -1,10 +1,8 @@
 from itertools import product
 from typing import Optional, Tuple, Dict
-import pandas as pd
+
 import torch
 from sklearn.linear_model import LogisticRegression
-from time import time as t
-
 
 
 def assign_labels(
@@ -18,18 +16,21 @@ def assign_labels(
     """
     Assign labels to the neurons based on highest average spiking activity.
 
-    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a single layer's spiking activity.
-    :param labels: Vector of shape ``(n_samples,)`` with data labels corresponding to spiking activity.
+    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a single
+        layer's spiking activity.
+    :param labels: Vector of shape ``(n_samples,)`` with data labels corresponding to
+        spiking activity.
     :param n_labels: The number of target labels in the data.
-    :param rates: If passed, these represent spike rates from a previous ``assign_labels()`` call.
+    :param rates: If passed, these represent spike rates from a previous
+        ``assign_labels()`` call.
     :param alpha: Rate of decay of label assignments.
-    :return: Tuple of class assignments, per-class spike proportions, and per-class firing rates.
+    :return: Tuple of class assignments, per-class spike proportions, and per-class
+        firing rates.
     """
     n_neurons = spikes.size(2)
 
-    #print("assign_labels")
     if rates is None:
-        rates = torch.zeros_like(torch.Tensor(n_neurons, n_labels))
+        rates = torch.zeros(n_neurons, n_labels)
 
     # Sum over time dimension (spike ordering doesn't matter).
     spikes = spikes.sum(1)
@@ -46,16 +47,14 @@ def assign_labels(
             rates[:, i] = alpha * rates[:, i] + (
                 torch.sum(spikes[indices], 0) / n_labeled
             )
-    # print(rates[:20, :])
 
     # Compute proportions of spike activity per class.
     proportions = rates / rates.sum(1, keepdim=True)
     proportions[proportions != proportions] = 0  # Set NaNs to 0
-    #print(proportions[:20, :])
-    #print(proportions[:20])
+
     # Neuron assignments are the labels they fire most for.
     assignments = torch.max(proportions, 1)[1]
-    #print(assignments[:20])
+
     return assignments, proportions, rates
 
 
@@ -67,7 +66,8 @@ def logreg_fit(
     (Re)fit logistic regression model to spike data summed over time.
 
     :param spikes: Summed (over time) spikes of shape ``(n_examples, time, n_neurons)``.
-    :param labels: Vector of shape ``(n_samples,)`` with data labels corresponding to spiking activity.
+    :param labels: Vector of shape ``(n_samples,)`` with data labels corresponding to
+        spiking activity.
     :param logreg: Logistic regression model from previous fits.
     :return: (Re)fitted logistic regression model.
     """
@@ -95,55 +95,36 @@ def logreg_predict(spikes: torch.Tensor, logreg: LogisticRegression) -> torch.Te
 
 def all_activity(
     spikes: torch.Tensor, assignments: torch.Tensor, n_labels: int
-, temp=None) -> torch.Tensor:
+) -> torch.Tensor:
     # language=rst
     """
     Classify data with the label with highest average spiking activity over all neurons.
 
-    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a layer's spiking activity.
+    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a layer's
+        spiking activity.
     :param assignments: A vector of shape ``(n_neurons,)`` of neuron label assignments.
     :param n_labels: The number of target labels in the data.
-    :return: Predictions tensor of shape ``(n_samples,)`` resulting from the "all activity" classification scheme.
+    :return: Predictions tensor of shape ``(n_samples,)`` resulting from the "all
+        activity" classification scheme.
     """
     n_samples = spikes.size(0)
-    #print(n_samples)
-    #print(spikes.size())
+
     # Sum over time dimension (spike ordering doesn't matter).
     spikes = spikes.sum(1)
-    #h = spikes.cpu()
-    #k = h.numpy()
-    #dfw = pd.DataFrame(k)
 
-    #dfw.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/spikerates_' + '.csv',
-    #           index=False)
-    #print(spikes)
-    #print(spikes.size())
     rates = torch.zeros(n_samples, n_labels)
-    #print(rates)
-    #print(assignments)
-    #print(assignments.size())
-    #print("all_activity")
     for i in range(n_labels):
         # Count the number of neurons with this label assignment.
         n_assigns = torch.sum(assignments == i).float()
-        #print(str(i)+"_"+str(n_assigns))
+
         if n_assigns > 0:
             # Get indices of samples with this label.
             indices = torch.nonzero(assignments == i).view(-1)
-            #print(str(i) + "_" + str(indices))
+
             # Compute layer-wise firing rate for this label.
-            #print(spikes[:, indices])
-            #print(torch.sum(spikes[:, indices], 1))
             rates[:, i] = torch.sum(spikes[:, indices], 1) / n_assigns
-            #print(rates[:, i])
 
     # Predictions are arg-max of layer-wise firing rates.
-    #print(rates)
-    #a = torch.sort(rates, dim=1, descending=True)[1][:, 0]
-    #print(a.size())
-
-
-
     return torch.sort(rates, dim=1, descending=True)[1][:, 0]
 
 
@@ -155,16 +136,17 @@ def proportion_weighting(
 ) -> torch.Tensor:
     # language=rst
     """
-    Classify data with the label with highest average spiking activity over all neurons, weighted by class-wise
-    proportion.
+    Classify data with the label with highest average spiking activity over all neurons,
+    weighted by class-wise proportion.
 
-    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a single layer's spiking activity.
+    :param spikes: Binary tensor of shape ``(n_samples, time, n_neurons)`` of a single
+        layer's spiking activity.
     :param assignments: A vector of shape ``(n_neurons,)`` of neuron label assignments.
-    :param proportions: A matrix of shape ``(n_neurons, n_labels)`` giving the per-class proportions of neuron spiking
-                        activity.
+    :param proportions: A matrix of shape ``(n_neurons, n_labels)`` giving the per-class
+        proportions of neuron spiking activity.
     :param n_labels: The number of target labels in the data.
-    :return: Predictions tensor of shape ``(n_samples,)`` resulting from the "proportion weighting" classification
-             scheme.
+    :return: Predictions tensor of shape ``(n_samples,)`` resulting from the "proportion
+        weighting" classification scheme.
     """
     n_samples = spikes.size(0)
 
@@ -225,7 +207,7 @@ def ngram(
 
         predictions.append(torch.argmax(score))
 
-    return torch.Tensor(predictions).long()
+    return torch.tensor(predictions).long()
 
 
 def update_ngram_scores(
@@ -237,7 +219,8 @@ def update_ngram_scores(
 ) -> Dict[Tuple[int, ...], torch.Tensor]:
     # language=rst
     """
-    Updates ngram scores by adding the count of each spike sequence of length n from the past ``n_examples``.
+    Updates ngram scores by adding the count of each spike sequence of length n from the
+    past ``n_examples``.
 
     :param spikes: Spikes of shape ``(n_examples, time, n_neurons)``.
     :param labels: The ground truth labels of shape ``(n_examples)``.

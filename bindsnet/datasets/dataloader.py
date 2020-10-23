@@ -11,7 +11,7 @@ class DataLoader(torch.utils.data.DataLoader):
         shuffle=False,
         sampler=None,
         batch_sampler=None,
-        num_workers=16,
+        num_workers=0,
         collate_fn=time_aware_collate,
         pin_memory=False,
         drop_last=False,

@@ -11,7 +11,7 @@ def plot_weights_movie(ws: np.ndarray, sample_every: int = 1) -> None:
     """
     Create and plot movie of weights.
     
-    :param ws: Array of shape ``[n_examples, source, target, time]``
+    :param ws: Array of shape ``[n_examples, source, target, time]``.
     :param sample_every: Sub-sample using this parameter.
     """
     weights = []
@@ -53,7 +53,8 @@ def plot_spike_trains_for_example(
     """
     Plot spike trains for top-k neurons or for specific indices.
 
-    :param spikes: Spikes for one simulation run of shape ``(n_examples, n_neurons, time)``.
+    :param spikes: Spikes for one simulation run of shape
+        ``(n_examples, n_neurons, time)``.
     :param n_ex: Allows user to pick which example to plot spikes for.
     :param top_k: Plot k neurons that spiked the most for n_ex example.
     :param indices: Plot specific neurons' spiking activity instead of top_k.
@@ -133,3 +134,70 @@ def plot_voltage(
         plt.axhline(threshold, linestyle="--", color="black", zorder=0)
 
     plt.show()
+
+
+def summary(net) -> str:
+    # language=rst
+    """
+    Summarizes informations about a Network.
+    Includes layers and connection informations.
+
+    :param net: Network
+    :return: string
+    """
+    total_neurons = 0
+    total_trainable_neurons = 0
+    total_weights = 0
+    total_trainable_weights = 0
+    out = "\033[92m         ===============\n"
+    out += "         NETWORK SUMMARY\n"
+    out += "         ===============\n"
+    out += "         \033[0mbatch size:" + str(net.batch_size) + "\n"
+    for l in net.layers:
+        out += "    \033[0m··········································\n"
+        out += "    Layer: '" + l + "'"
+
+        if net.layers[l].learning:
+            out += " (trainable)\n"
+            total_trainable_neurons += net.layers[l].n
+        else:
+            out += " (not trainable)\n"
+
+        out += (
+            "   "
+            + "{:,}".format(net.layers[l].n)
+            + " neurons "
+            + str(net.layers[l].shape)
+            + "\n"
+        )
+        total_neurons += net.layers[l].n
+        for c in net.connections:
+            if c[0] == l:
+                w_size = 1
+                for dim in net.connections[c[0], c[1]].w.shape:
+                    w_size *= dim
+                out += (
+                    "       \033[94m·connected to '"
+                    + c[1]
+                    + "' by "
+                    + "{:,}".format(w_size)
+                    + " synapses\n"
+                )
+                total_weights += w_size
+                if net.layers[c[1]].learning:
+                    total_trainable_weights += w_size
+
+    out += "     \033[92m==========================\n"
+    out += (
+        "\033[95mTotal neurons: "
+        + "{:,}".format(total_neurons)
+        + " ({:,} trainable)".format(total_trainable_neurons)
+        + "\n"
+    )
+    out += (
+        "Total synapses weights: "
+        + "{:,}".format(total_weights)
+        + " ({:,} trainable)".format(total_trainable_weights)
+        + "\033[0m"
+    )
+    return out

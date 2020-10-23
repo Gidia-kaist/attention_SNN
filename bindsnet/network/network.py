@@ -2,9 +2,9 @@ import tempfile
 from typing import Dict, Optional, Type, Iterable
 
 import torch
-import pandas as pd
+
 from .monitors import AbstractMonitor
-from .nodes import AbstractInput, Nodes
+from .nodes import Nodes
 from .topology import AbstractConnection
 from ..learning.reward import AbstractReward
 
@@ -13,9 +13,11 @@ def load(file_name: str, map_location: str = "cpu", learning: bool = None) -> "N
     # language=rst
     """
     Loads serialized network object from disk.
+
     :param file_name: Path to serialized network object on disk.
     :param map_location: One of ``"cpu"`` or ``"cuda"``. Defaults to ``"cpu"``.
-    :param learning: Whether to load with learning enabled. Default loads value from disk.
+    :param learning: Whether to load with learning enabled. Default loads value from
+        disk.
     """
     network = torch.load(open(file_name, "rb"), map_location=map_location)
     if learning is not None and "learning" in vars(network):
@@ -27,35 +29,47 @@ def load(file_name: str, map_location: str = "cpu", learning: bool = None) -> "N
 class Network(torch.nn.Module):
     # language=rst
     """
-    Most important object of the ``bindsnet`` package. Responsible for the simulation and interaction of nodes and
-    connections.
+    Central object of the ``bindsnet`` package. Responsible for the simulation and
+    interaction of nodes and connections.
+
     **Example:**
+
     .. code-block:: python
+
         import torch
         import matplotlib.pyplot as plt
+
         from bindsnet         import encoding
         from bindsnet.network import Network, nodes, topology, monitors
+
         network = Network(dt=1.0)  # Instantiates network.
+
         X = nodes.Input(100)  # Input layer.
         Y = nodes.LIFNodes(100)  # Layer of LIF neurons.
         C = topology.Connection(source=X, target=Y, w=torch.rand(X.n, Y.n))  # Connection from X to Y.
+
         # Spike monitor objects.
         M1 = monitors.Monitor(obj=X, state_vars=['s'])
         M2 = monitors.Monitor(obj=Y, state_vars=['s'])
+
         # Add everything to the network object.
         network.add_layer(layer=X, name='X')
         network.add_layer(layer=Y, name='Y')
         network.add_connection(connection=C, source='X', target='Y')
         network.add_monitor(monitor=M1, name='X')
         network.add_monitor(monitor=M2, name='Y')
+
         # Create Poisson-distributed spike train inputs.
         data = 15 * torch.rand(100)  # Generate random Poisson rates for 100 input neurons.
         train = encoding.poisson(datum=data, time=5000)  # Encode input as 5000ms Poisson spike trains.
+
         # Simulate network on generated spike trains.
-        inpts = {'X' : train}  # Create inputs mapping.
-        network.run(inpts=inpts, time=5000)  # Run network simulation.
+        inputs = {'X' : train}  # Create inputs mapping.
+        network.run(inputs=inputs, time=5000)  # Run network simulation.
+
         # Plot spikes of input and output layers.
         spikes = {'X' : M1.get('s'), 'Y' : M2.get('s')}
+
         fig, axes = plt.subplots(2, 1, figsize=(12, 7))
         for i, layer in enumerate(spikes):
             axes[i].matshow(spikes[layer], cmap='binary')
@@ -63,33 +77,38 @@ class Network(torch.nn.Module):
             axes[i].set_xlabel('Time'); axes[i].set_ylabel('Index of neuron')
             axes[i].set_xticks(()); axes[i].set_yticks(())
             axes[i].set_aspect('auto')
+
         plt.tight_layout(); plt.show()
     """
 
     def __init__(
-            self,
-            filter_mask: bool = True,
-            dt: float = 1.0,
-            batch_size: int = 1,
-            learning: bool = True,
-            reward_fn: Optional[Type[AbstractReward]] = None,
+        self,
+        dt: float = 1.0,
+        batch_size: int = 1,
+        learning: bool = True,
+        reward_fn: Optional[Type[AbstractReward]] = None,
     ) -> None:
         # language=rst
         """
         Initializes network object.
+
         :param dt: Simulation timestep.
+        :param batch_size: Mini-batch size.
         :param learning: Whether to allow connection updates. True by default.
-        :param reward_fn: Optional class allowing for modification of reward in case of reward-modulated learning.
+        :param reward_fn: Optional class allowing for modification of reward in case of
+            reward-modulated learning.
         """
         super().__init__()
 
         self.dt = dt
         self.batch_size = batch_size
+
         self.layers = {}
         self.connections = {}
         self.monitors = {}
+
         self.train(learning)
-        self.filter_mask = filter_mask
+
         if reward_fn is not None:
             self.reward_fn = reward_fn()
         else:
@@ -99,6 +118,7 @@ class Network(torch.nn.Module):
         # language=rst
         """
         Adds a layer of nodes to the network.
+
         :param layer: A subclass of the ``Nodes`` object.
         :param name: Logical name of layer.
         """
@@ -110,11 +130,12 @@ class Network(torch.nn.Module):
         layer.set_batch_size(self.batch_size)
 
     def add_connection(
-            self, connection: AbstractConnection, source: str, target: str
+        self, connection: AbstractConnection, source: str, target: str
     ) -> None:
         # language=rst
         """
         Adds a connection between layers of nodes to the network.
+
         :param connection: An instance of class ``Connection``.
         :param source: Logical name of the connection's source layer.
         :param target: Logical name of the connection's target layer.
@@ -129,6 +150,7 @@ class Network(torch.nn.Module):
         # language=rst
         """
         Adds a monitor on a network object to the network.
+
         :param monitor: An instance of class ``Monitor``.
         :param name: Logical name of monitor object.
         """
@@ -140,23 +162,32 @@ class Network(torch.nn.Module):
         # language=rst
         """
         Serializes the network object to disk.
+
         :param file_name: Path to store serialized network object on disk.
+
         **Example:**
+
         .. code-block:: python
+
             import torch
             import matplotlib.pyplot as plt
+
             from pathlib          import Path
             from bindsnet.network import *
             from bindsnet.network import topology
+
             # Build simple network.
             network = Network(dt=1.0)
+
             X = nodes.Input(100)  # Input layer.
             Y = nodes.LIFNodes(100)  # Layer of LIF neurons.
             C = topology.Connection(source=X, target=Y, w=torch.rand(X.n, Y.n))  # Connection from X to Y.
+
             # Add everything to the network object.
             network.add_layer(layer=X, name='X')
             network.add_layer(layer=Y, name='Y')
             network.add_connection(connection=C, source='X', target='Y')
+
             # Save the network to disk.
             network.save(str(Path.home()) + '/network.pt')
         """
@@ -166,7 +197,7 @@ class Network(torch.nn.Module):
         # language=rst
         """
         Returns a cloned network object.
-
+        
         :return: A copy of this network.
         """
         virtual_file = tempfile.SpooledTemporaryFile()
@@ -178,10 +209,11 @@ class Network(torch.nn.Module):
         # language=rst
         """
         Fetches outputs from network layers to use as input to downstream layers.
+
         :param layers: Layers to update inputs for. Defaults to all network layers.
         :return: Inputs to all layers for the current iteration.
         """
-        inpts = {}
+        inputs = {}
 
         if layers is None:
             layers = self.layers
@@ -193,30 +225,32 @@ class Network(torch.nn.Module):
                 source = self.connections[c].source
                 target = self.connections[c].target
 
-                if not c[1] in inpts:
-                    inpts[c[1]] = torch.zeros(
+                if not c[1] in inputs:
+                    inputs[c[1]] = torch.zeros(
                         self.batch_size, *target.shape, device=target.s.device
                     )
 
                 # Add to input: source's spikes multiplied by connection weights.
-                inpts[c[1]] += self.connections[c].compute(source.s)
+                inputs[c[1]] += self.connections[c].compute(source.s)
 
-        return inpts
+        return inputs
 
     def run(
-            self, inpts: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
+        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
     ) -> None:
         # language=rst
         """
         Simulate network for given inputs and time.
-        :param filter: Do connectivity pruning or not
-        :param inpts: Dictionary of ``Tensor``s of shape ``[time, *input_shape]`` or
-                      ``[batch_size, time, *input_shape]``.
+
+        :param inputs: Dictionary of ``Tensor``s of shape ``[time, *input_shape]`` or
+                      ``[time, batch_size, *input_shape]``.
         :param time: Simulation time.
         :param one_step: Whether to run the network in "feed-forward" mode, where inputs
             propagate all the way through the network in a single simulation time step.
             Layers are updated in the order they are added to the network.
+
         Keyword arguments:
+
         :param Dict[str, torch.Tensor] clamp: Mapping of layer names to boolean masks if
             neurons should be clamped to spiking. The ``Tensor``s have shape
             ``[n_neurons]`` or ``[time, n_neurons]``.
@@ -230,21 +264,29 @@ class Network(torch.nn.Module):
             learning.
         :param Dict[Tuple[str], torch.Tensor] masks: Mapping of connection names to
             boolean masks determining which weights to clamp to zero.
+
         **Example:**
+
         .. code-block:: python
+
             import torch
             import matplotlib.pyplot as plt
+
             from bindsnet.network import Network
             from bindsnet.network.nodes import Input
             from bindsnet.network.monitors import Monitor
+
             # Build simple network.
             network = Network()
             network.add_layer(Input(500), name='I')
             network.add_monitor(Monitor(network.layers['I'], state_vars=['s']), 'I')
+
             # Generate spikes by running Bernoulli trials on Uniform(0, 0.5) samples.
             spikes = torch.bernoulli(0.5 * torch.rand(500, 500))
+
             # Run network simulation.
-            network.run(inpts={'I' : spikes}, time=500)
+            network.run(inputs={'I' : spikes}, time=500)
+
             # Look at input spiking activity.
             spikes = network.monitors['I'].get('s')
             plt.matshow(spikes, cmap='binary')
@@ -259,63 +301,60 @@ class Network(torch.nn.Module):
         masks = kwargs.get("masks", {})
         injects_v = kwargs.get("injects_v", {})
 
-        boolean_mask = torch.ones([784, 1600])
-
         # Compute reward.
         if self.reward_fn is not None:
             kwargs["reward"] = self.reward_fn.compute(**kwargs)
 
         # Dynamic setting of batch size.
-        #print(inpts)
-        if inpts != {}:
-            for key in inpts:
+        if inputs != {}:
+            for key in inputs:
                 # goal shape is [time, batch, n_0, ...]
-                if len(inpts[key].size()) == 1:
+                if len(inputs[key].size()) == 1:
                     # current shape is [n_0, ...]
                     # unsqueeze twice to make [1, 1, n_0, ...]
-                    inpts[key] = inpts[key].unsqueeze(0).unsqueeze(0)
-                elif len(inpts[key].size()) == 2:
+                    inputs[key] = inputs[key].unsqueeze(0).unsqueeze(0)
+                elif len(inputs[key].size()) == 2:
                     # current shape is [time, n_0, ...]
                     # unsqueeze dim 1 so that we have
                     # [time, 1, n_0, ...]
-                    inpts[key] = inpts[key].unsqueeze(1)
+                    inputs[key] = inputs[key].unsqueeze(1)
 
-            for key in inpts:
+            for key in inputs:
                 # batch dimension is 1, grab this and use for batch size
-                if inpts[key].size(1) != self.batch_size:
-                    self.batch_size = inpts[key].size(1)
+                if inputs[key].size(1) != self.batch_size:
+                    self.batch_size = inputs[key].size(1)
 
                     for l in self.layers:
                         self.layers[l].set_batch_size(self.batch_size)
 
                     for m in self.monitors:
-                        self.monitors[m].reset_()
+                        self.monitors[m].reset_state_variables()
 
                 break
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)
 
-        # Get input to all layers (synchronous mode).
-        if not one_step:
-            inpts.update(self._get_inputs())
-
         # Simulate network activity for `time` timesteps.
-
         for t in range(timesteps):
+            # Get input to all layers (synchronous mode).
+            current_inputs = {}
+            if not one_step:
+                current_inputs.update(self._get_inputs())
+
             for l in self.layers:
                 # Update each layer of nodes.
-                if isinstance(self.layers[l], AbstractInput):
-                    # shape is [time, batch, n_0, ...]
-                    self.layers[l].forward(x=inpts[l][t])  # forward (spike 발생 기록, theta_plus 등 update)
+                if l in inputs:
+                    if l in current_inputs:
+                        current_inputs[l] += inputs[l][t]
+                    else:
+                        current_inputs[l] = inputs[l][t]
 
-                else:
-                    # !!! NO PASSING HERE !!!
-                    if one_step:
-                        # Get input to this layer (one-step mode).
-                        inpts.update(self._get_inputs(layers=[l]))
-                        print('step 2')
-                    self.layers[l].forward(x=inpts[l])
+                if one_step:
+                    # Get input to this layer (one-step mode).
+                    current_inputs.update(self._get_inputs(layers=[l]))
+
+                self.layers[l].forward(x=current_inputs[l])
 
                 # Clamp neurons to spike.
                 clamp = clamps.get(l, None)
@@ -343,15 +382,12 @@ class Network(torch.nn.Module):
 
             # Run synapse updates.
             for c in self.connections:
-                # print(self.connections[c])
                 self.connections[c].update(
-                    mask=masks.get(c, None),
-                    learning=self.learning,
-                    **kwargs
+                    mask=masks.get(c, None), learning=self.learning, **kwargs
                 )
 
             # Get input to all layers.
-            inpts.update(self._get_inputs())
+            current_inputs.update(self._get_inputs())
 
             # Record state variables of interest.
             for m in self.monitors:
@@ -361,32 +397,28 @@ class Network(torch.nn.Module):
         for c in self.connections:
             self.connections[c].normalize()
 
-
-
-
-    def reset_(self) -> None:
+    def reset_state_variables(self) -> None:
         # language=rst
         """
         Reset state variables of objects in network.
         """
         for layer in self.layers:
-            self.layers[layer].reset_()
+            self.layers[layer].reset_state_variables()
 
         for connection in self.connections:
-            self.connections[connection].reset_()
+            self.connections[connection].reset_state_variables()
 
         for monitor in self.monitors:
-            self.monitors[monitor].reset_()
+            self.monitors[monitor].reset_state_variables()
 
     def train(self, mode: bool = True) -> "torch.nn.Module":
         # language=rst
-        """Sets the node in training mode.
+        """
+        Sets the node in training mode.
+
         :param mode: Turn training on or off.
+
         :return: ``self`` as specified in ``torch.nn.Module``.
         """
         self.learning = mode
         return super().train(mode)
-
-    def share(self, filter_mask):
-        self.filter_mask = filter_mask
-

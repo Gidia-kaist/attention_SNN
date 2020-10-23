@@ -307,18 +307,10 @@ for epoch in range(n_epochs):
 
             # Convert the array of labels into a tensor
             label_tensor = torch.tensor(labels)
-            # print("Input count :" + str(SharedPreference.get_count(SharedPreference, 1)))
-            # print("exc to inh count :" + str(SharedPreference.get_count(SharedPreference, 2)))
-            # print("inh to exc count :" + str(SharedPreference.get_count(SharedPreference, 3)))
-            # Get network predictions.
-            # print(spike_record.size())
             all_activity_pred = all_activity(
                 spikes=spike_record, assignments=assignments, n_labels=n_classes
             )
 
-            # print(all_activity_pred.size())
-            # print(assignments.size())
-            # print(label_tensor.long().size())
             proportion_pred = proportion_weighting(
                 spikes=spike_record,
                 assignments=assignments,
@@ -377,69 +369,13 @@ for epoch in range(n_epochs):
                 n_labels=n_classes,
                 rates=rates,
             )
-            # print(assignments.size())
-            # print(all_activity_pred.size())
-            if sparse:
-                if mark_final == False and count <= final_stage_num:
-                    if count == 1:
-                        temp = assignments
-                        # print(temp.size())
-
-                    elif count % prune == 0 and count > 1:
-                        check_list = torch.where(temp == assignments, mark_true, mark_false)
-                        temp = assignments
-                        temp_n_neuron = SharedPreference.get_boolean_mask(SharedPreference)
-                        temp_count = 0
-                        for j in temp_n_neuron.nonzero():
-                            temp_count += 1
-                            i = j.item()
-                            if check_list[i] == 1:
-                                if abs(max(network.connections[("X", "Ae")].w[:, i]) - min(
-                                        network.connections[("X", "Ae")].w[:, i])) > connectivity:
-                                    # set connectivity of inpts to exc as ZERO(FALSE)
-                                    SharedPreference.set_boolean_mask(SharedPreference, i, 0)
-                                    # set connectivity of inh to exc as ZERO(FALSE)
-                                    SharedPreference.set_copy(SharedPreference,
-                                                              target=network.connections[("X", "Ae")].w, col=i)
-                                    network.connections[("X", "Ae")].w[:, i] = 0
-                                    mark_save = True
-                                    # print(network.connections[("X", "Ae")].w)
-                                    print("Some connectivities have changed! at: " + str(i))
-                                else:
-                                    SharedPreference.set_boolean_mask(SharedPreference, i, 1)
-
-                        print("Loop count: " + str(temp_count))
-                elif mark_final == False and count > final_stage_num:
-                    mark_final = True
-                    copied_one = SharedPreference.get_copy(SharedPreference)
-                    for i in range(784):
-                        for j in range(n_neurons):
-                            if copied_one[i, j] != 0:
-                                network.connections[("X", "Ae")].w[i, j] = copied_one[i, j]
-                    for h in range(n_neurons):
-                        SharedPreference.set_boolean_mask(SharedPreference, h, 1)
-                    print("Start_all_connection_test")
-
-                elif mark_final == True and count > final_stage_num:
-                    print("\nFinal_Stage__")
-
-                # if mark_save == True:
-
-                # df = pd.DataFrame(csv_datas_conn, columns=['Connectivity'])
-                # df.to_csv('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/conn_' + str(count) + "_" + str(now.year) + '_'
-                #          + str( now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(now.minute) + '.csv', index=False)
-                # mark_save = False
             count += 1
-            # print(assignments[0:80])
-            # print(SharedPreference.get_boolean_mask(SharedPreference))
             labels = []
-            #print("NODE_4")
             Gbef = network.connections[("X", "Ae")].w.cpu() * 0.3 + G_min
         labels.extend(batch["label"].tolist())
 
         # Run the network on the input.
         SharedPreference.initialize_count(SharedPreference)
-        # print(inpts.shape)
         network.run(inpts=inpts, time=time, input_time_dim=1)
 
         # Add to spikes recording.
@@ -451,17 +387,8 @@ for epoch in range(n_epochs):
                            + s.size(0)
         ] = s
 
-        # print(s.size())
-        # print("\n")
-        # print(spikes["Ae"].get("s").sum())
-        # print(s.size())
-        # print(spike_record.size())
-        # Get voltage recording.
         exc_voltages = exc_voltage_monitor.get("v")
         inh_voltages = inh_voltage_monitor.get("v")
-
-        # for l in spikes:
-        # print(l, spikes[l].get("s").sum((0, 2)))
 
         # Optionally plot various simulation information.
         if plot:

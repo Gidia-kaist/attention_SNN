@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-from datetime import datetime
 from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
 from torch.nn.modules.utils import _pair
@@ -13,7 +12,7 @@ from typing import Tuple, List, Optional, Sized, Dict, Union
 from ..utils import reshape_locally_connected_weights, reshape_conv2d_weights
 
 plt.ion()
-now = datetime.now()
+
 
 def plot_input(
     image: torch.Tensor,
@@ -79,10 +78,13 @@ def plot_spikes(
     """
     Plot spikes for any group(s) of neurons.
 
-    :param spikes: Mapping from layer names to spiking data. Spike data has shape ``[time, n_1, ..., n_k]``, where
-                   ``[n_1, ..., n_k]`` is the shape of the recorded layer.
-    :param time: Plot spiking activity of neurons in the given time range. Default is entire simulation time.
-    :param n_neurons: Plot spiking activity of neurons in the given range of neurons. Default is all neurons.
+    :param spikes: Mapping from layer names to spiking data. Spike data has shape
+        ``[time, n_1, ..., n_k]``, where ``[n_1, ..., n_k]`` is the shape of the
+        recorded layer.
+    :param time: Plot spiking activity of neurons in the given time range. Default is
+        entire simulation time.
+    :param n_neurons: Plot spiking activity of neurons in the given range of neurons.
+        Default is all neurons.
     :param ims: Used for re-drawing the plots.
     :param axes: Used for re-drawing the plots.
     :param figsize: Horizontal, vertical figure size in inches.
@@ -167,7 +169,7 @@ def plot_spikes(
                 "%s spikes for neurons (%d - %d) from t = %d to %d " % args
             )
 
-    #plt.draw()
+    plt.draw()
 
     return ims, axes
 
@@ -179,37 +181,68 @@ def plot_weights(
     im: Optional[AxesImage] = None,
     figsize: Tuple[int, int] = (5, 5),
     cmap: str = "hot_r",
-    count: int = 0,
+    save: Optional[str] = None,
 ) -> AxesImage:
     # language=rst
     """
     Plot a connection weight matrix.
 
-    :param count: Image #
     :param weights: Weight matrix of ``Connection`` object.
     :param wmin: Minimum allowed weight value.
     :param wmax: Maximum allowed weight value.
     :param im: Used for re-drawing the weights plot.
     :param figsize: Horizontal, vertical figure size in inches.
     :param cmap: Matplotlib colormap.
+    :param save: file name to save fig, if None = not saving fig.
     :return: ``AxesImage`` for re-drawing the weights plot.
     """
     local_weights = weights.detach().clone().cpu().numpy()
-    fig, ax = plt.subplots(figsize=figsize)
+    if save is not None:
+        plt.ioff()
 
-    im = ax.imshow(local_weights, cmap=cmap, vmin=wmin, vmax=wmax)
-    div = make_axes_locatable(ax)
-    cax = div.append_axes("right", size="5%", pad=0.05)
+        fig, ax = plt.subplots(figsize=figsize)
 
-    ax.set_xticks(())
-    ax.set_yticks(())
-    ax.set_aspect("auto")
+        im = ax.imshow(local_weights, cmap=cmap, vmin=wmin, vmax=wmax)
+        div = make_axes_locatable(ax)
+        cax = div.append_axes("right", size="5%", pad=0.05)
 
-    plt.colorbar(im, cax=cax)
-    fig.tight_layout()
-    fig.savefig('/home/gidia/anaconda3/envs/myspace/examples/mnist/outputs/imgs/'+str(now.year)+'_'+str(now.month)+'_'+str(now.day)+'_'+str(now.hour)+'_'+str(now.minute)+'_img_'+ str(count) + '.png')
+        ax.set_xticks(())
+        ax.set_yticks(())
+        ax.set_aspect("auto")
 
-    return im
+        plt.colorbar(im, cax=cax)
+        fig.tight_layout()
+
+        a = save.split(".")
+        if len(a) == 2:
+            save = a[0] + ".1." + a[1]
+        else:
+            a[1] = "." + str(1 + int(a[1])) + ".png"
+            save = a[0] + a[1]
+
+        plt.savefig(save, bbox_inches="tight")
+
+        plt.close(fig)
+        plt.ion()
+        return im, save
+    else:
+        if not im:
+            fig, ax = plt.subplots(figsize=figsize)
+
+            im = ax.imshow(local_weights, cmap=cmap, vmin=wmin, vmax=wmax)
+            div = make_axes_locatable(ax)
+            cax = div.append_axes("right", size="5%", pad=0.05)
+
+            ax.set_xticks(())
+            ax.set_yticks(())
+            ax.set_aspect("auto")
+
+            plt.colorbar(im, cax=cax)
+            fig.tight_layout()
+        else:
+            im.set_data(local_weights)
+
+        return im
 
 
 def plot_conv2d_weights(
@@ -282,19 +315,21 @@ def plot_locally_connected_weights(
 ) -> AxesImage:
     # language=rst
     """
-    Plot a connection weight matrix of a :code:`Connection` with `locally connected structure
-    <http://yann.lecun.com/exdb/publis/pdf/gregor-nips-11.pdf>_.
+    Plot a connection weight matrix of a :code:`Connection` with `locally connected
+    structure <http://yann.lecun.com/exdb/publis/pdf/gregor-nips-11.pdf>_.
 
     :param weights: Weight matrix of Conv2dConnection object.
     :param n_filters: No. of convolution kernels in use.
     :param kernel_size: Side length(s) of 2D convolution kernels.
     :param conv_size: Side length(s) of 2D convolution population.
-    :param locations: Indices of input receptive fields for convolution population neurons.
+    :param locations: Indices of input receptive fields for convolution population
+        neurons.
     :param input_sqrt: Side length(s) of 2D input data.
     :param wmin: Minimum allowed weight value.
     :param wmax: Maximum allowed weight value.
     :param im: Used for re-drawing the weights plot.
-    :param lines: Whether or not to draw horizontal and vertical lines separating input regions.
+    :param lines: Whether or not to draw horizontal and vertical lines separating input
+        regions.
     :param figsize: Horizontal, vertical figure size in inches.
     :param cmap: Matplotlib colormap.
     :return: Used for re-drawing the weights plot.
@@ -347,6 +382,7 @@ def plot_assignments(
     im: Optional[AxesImage] = None,
     figsize: Tuple[int, int] = (5, 5),
     classes: Optional[Sized] = None,
+    save: Optional[str] = None,
 ) -> AxesImage:
     # language=rst
     """
@@ -356,10 +392,14 @@ def plot_assignments(
     :param im: Used for re-drawing the assignments plot.
     :param figsize: Horizontal, vertical figure size in inches.
     :param classes: Iterable of labels for colorbar ticks corresponding to data labels.
+    :param save: file name to save fig, if None = not saving fig.
     :return: Used for re-drawing the assigments plot.
     """
     locals_assignments = assignments.detach().clone().cpu().numpy()
-    if not im:
+
+    if save is not None:
+        plt.ioff()
+
         fig, ax = plt.subplots(figsize=figsize)
         ax.set_title("Categorical assignments")
 
@@ -384,17 +424,51 @@ def plot_assignments(
 
         ax.set_xticks(())
         ax.set_yticks(())
-        fig.tight_layout()
-    else:
-        im.set_data(locals_assignments)
+        # fig.tight_layout()
 
-    return im
+        fig.savefig(save, bbox_inches="tight")
+        plt.close()
+
+        plt.ion()
+        return im
+    else:
+        if not im:
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.set_title("Categorical assignments")
+
+            if classes is None:
+                color = plt.get_cmap("RdBu", 11)
+                im = ax.matshow(locals_assignments, cmap=color, vmin=-1.5, vmax=9.5)
+            else:
+                color = plt.get_cmap("RdBu", len(classes) + 1)
+                im = ax.matshow(
+                    locals_assignments, cmap=color, vmin=-1.5, vmax=len(classes) - 0.5
+                )
+
+            div = make_axes_locatable(ax)
+            cax = div.append_axes("right", size="5%", pad=0.05)
+
+            if classes is None:
+                cbar = plt.colorbar(im, cax=cax, ticks=list(range(-1, 11)))
+                cbar.ax.set_yticklabels(["none"] + list(range(10)))
+            else:
+                cbar = plt.colorbar(im, cax=cax, ticks=np.arange(-1, len(classes)))
+                cbar.ax.set_yticklabels(["none"] + list(classes))
+
+            ax.set_xticks(())
+            ax.set_yticks(())
+            fig.tight_layout()
+        else:
+            im.set_data(locals_assignments)
+
+        return im
 
 
 def plot_performance(
     performances: Dict[str, List[float]],
     ax: Optional[Axes] = None,
     figsize: Tuple[int, int] = (7, 4),
+    save: Optional[str] = None,
 ) -> Axes:
     # language=rst
     """
@@ -403,27 +477,52 @@ def plot_performance(
     :param performances: Lists of training accuracy estimates per voting scheme.
     :param ax: Used for re-drawing the performance plot.
     :param figsize: Horizontal, vertical figure size in inches.
+    :param save: file name to save fig, if None = not saving fig.
     :return: Used for re-drawing the performance plot.
     """
-    if not ax:
+
+    if save is not None:
+        plt.ioff()
         _, ax = plt.subplots(figsize=figsize)
+
+        for scheme in performances:
+            ax.plot(
+                range(len(performances[scheme])),
+                [p for p in performances[scheme]],
+                label=scheme,
+            )
+
+        ax.set_ylim([0, 100])
+        ax.set_title("Estimated classification accuracy")
+        ax.set_xlabel("No. of examples")
+        ax.set_ylabel("Accuracy")
+        ax.set_xticks(())
+        ax.set_yticks(range(0, 110, 10))
+        ax.legend()
+
+        plt.savefig(save, bbox_inches="tight")
+        plt.close()
+        plt.ion()
     else:
-        ax.clear()
+        if not ax:
+            _, ax = plt.subplots(figsize=figsize)
+        else:
+            ax.clear()
 
-    for scheme in performances:
-        ax.plot(
-            range(len(performances[scheme])),
-            [p for p in performances[scheme]],
-            label=scheme,
-        )
+        for scheme in performances:
+            ax.plot(
+                range(len(performances[scheme])),
+                [p for p in performances[scheme]],
+                label=scheme,
+            )
 
-    ax.set_ylim([0, 100])
-    ax.set_title("Estimated classification accuracy")
-    ax.set_xlabel("No. of examples")
-    ax.set_ylabel("Accuracy")
-    ax.set_xticks(())
-    ax.set_yticks(range(0, 110, 10))
-    ax.legend()
+        ax.set_ylim([0, 100])
+        ax.set_title("Estimated classification accuracy")
+        ax.set_xlabel("No. of examples")
+        ax.set_ylabel("Accuracy")
+        ax.set_xticks(())
+        ax.set_yticks(range(0, 110, 10))
+        ax.legend()
 
     return ax
 
@@ -446,22 +545,26 @@ def plot_voltages(
     :param voltages: Contains voltage data by neuron layers.
     :param ims: Used for re-drawing the plots.
     :param axes: Used for re-drawing the plots.
-    :param time: Plot voltages of neurons in given time range. Default is entire simulation time.
-    :param n_neurons: Plot voltages of neurons in given range of neurons. Default is all neurons.
+    :param time: Plot voltages of neurons in given time range. Default is entire
+        simulation time.
+    :param n_neurons: Plot voltages of neurons in given range of neurons. Default is all
+        neurons.
     :param cmap: Matplotlib colormap to use.
     :param figsize: Horizontal, vertical figure size in inches.
-    :param plot_type: The way how to draw graph. 'color' for pcolormesh, 'line' for curved lines.
+    :param plot_type: The way how to draw graph. 'color' for pcolormesh, 'line' for
+        curved lines.
     :param thresholds: Thresholds of the neurons in each layer.
     :return: ``ims, axes``: Used for re-drawing the plots.
     """
     n_subplots = len(voltages.keys())
 
-    for key in voltages.keys():
-        voltages[key] = voltages[key].view(-1, voltages[key].size(-1))
+    # for key in voltages.keys():
+    #     voltages[key] = voltages[key].view(-1, voltages[key].size(-1))
+    voltages = {k: v.view(v.size(0), -1) for (k, v) in voltages.items()}
 
     if time is None:
         for key in voltages.keys():
-            time = (0, voltages[key].size(-1))
+            time = (0, voltages[key].size(0))
             break
 
     if n_neurons is None:
@@ -469,7 +572,7 @@ def plot_voltages(
 
     for key, val in voltages.items():
         if key not in n_neurons.keys():
-            n_neurons[key] = (0, val.size(0))
+            n_neurons[key] = (0, val.size(1))
 
     if not ims:
         fig, axes = plt.subplots(n_subplots, 1, figsize=figsize)
@@ -484,8 +587,8 @@ def plot_voltages(
                             .clone()
                             .cpu()
                             .numpy()[
-                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                                 time[0] : time[1],
+                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                             ]
                         )
                     )
@@ -504,8 +607,8 @@ def plot_voltages(
                             v[1]
                             .cpu()
                             .numpy()[
-                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                                 time[0] : time[1],
+                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                             ]
                             .T,
                             cmap=cmap,
@@ -531,8 +634,8 @@ def plot_voltages(
                             v[1]
                             .cpu()
                             .numpy()[
-                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                                 time[0] : time[1],
+                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                             ]
                         )
                     )
@@ -550,8 +653,8 @@ def plot_voltages(
                             v[1]
                             .cpu()
                             .numpy()[
-                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                                 time[0] : time[1],
+                                n_neurons[v[0]][0] : n_neurons[v[0]][1],
                             ]
                             .T,
                             cmap=cmap,
@@ -582,7 +685,7 @@ def plot_voltages(
                         v[1]
                         .cpu()
                         .numpy()[
-                            n_neurons[v[0]][0] : n_neurons[v[0]][1], time[0] : time[1]
+                            time[0] : time[1], n_neurons[v[0]][0] : n_neurons[v[0]][1]
                         ]
                     )
                     if thresholds is not None and thresholds[v[0]].size() == torch.Size(
@@ -594,7 +697,7 @@ def plot_voltages(
                         v[1]
                         .cpu()
                         .numpy()[
-                            n_neurons[v[0]][0] : n_neurons[v[0]][1], time[0] : time[1]
+                            time[0] : time[1], n_neurons[v[0]][0] : n_neurons[v[0]][1]
                         ]
                         .T,
                         cmap=cmap,
@@ -614,7 +717,7 @@ def plot_voltages(
                         v[1]
                         .cpu()
                         .numpy()[
-                            n_neurons[v[0]][0] : n_neurons[v[0]][1], time[0] : time[1]
+                            time[0] : time[1], n_neurons[v[0]][0] : n_neurons[v[0]][1],
                         ]
                     )
                     if thresholds is not None and thresholds[v[0]].size() == torch.Size(
@@ -628,7 +731,7 @@ def plot_voltages(
                         v[1]
                         .cpu()
                         .numpy()[
-                            n_neurons[v[0]][0] : n_neurons[v[0]][1], time[0] : time[1]
+                            time[0] : time[1], n_neurons[v[0]][0] : n_neurons[v[0]][1],
                         ]
                         .T,
                         cmap=cmap,

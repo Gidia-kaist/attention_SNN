@@ -42,10 +42,12 @@ class SpokenMNIST(torch.utils.data.Dataset):
     ) -> None:
         # language=rst
         """
-        Constructor for the ``SpokenMNIST`` object. Makes the data directory if it doesn't already exist.
+        Constructor for the ``SpokenMNIST`` object. Makes the data directory if it
+        doesn't already exist.
 
         :param path: Pathname of directory in which to store the dataset.
-        :param download: Whether or not to download the dataset (requires internet connection).
+        :param download: Whether or not to download the dataset (requires internet
+            connection).
         :param shuffle: Whether to randomly permute order of dataset.
         :param train: Load training split if true else load test split
         :param split: Train, test split; in range ``(0, 1)``.
@@ -101,7 +103,10 @@ class SpokenMNIST(torch.utils.data.Dataset):
                 # Serialize image data on disk for next time.
                 torch.save((audio, labels), open(path, "wb"))
             else:
-                msg = "Dataset not found on disk; specify 'download=True' to allow downloads."
+                msg = (
+                    "Dataset not found on disk; specify 'download=True' to allow"
+                    " downloads."
+                )
                 raise FileNotFoundError(msg)
         else:
             if not os.path.isdir(path):
@@ -146,7 +151,10 @@ class SpokenMNIST(torch.utils.data.Dataset):
                 # Serialize image data on disk for next time.
                 torch.save((audio, labels), open(path, "wb"))
             else:
-                msg = "Dataset not found on disk; specify 'download=True' to allow downloads."
+                msg = (
+                    "Dataset not found on disk; specify 'download=True' to allow"
+                    " downloads."
+                )
                 raise FileNotFoundError(msg)
         else:
             if not os.path.isdir(path):

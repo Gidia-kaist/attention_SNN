@@ -5,7 +5,7 @@
       <paths name="gidia@143.248.115.182:22">
         <serverdata>
           <mappings>
-            <mapping deploy="/rnn" local="$PROJECT_DIR$" />
+            <mapping deploy="/rnn_road" local="$PROJECT_DIR$" web="" />
           </mappings>
         </serverdata>
       </paths>
