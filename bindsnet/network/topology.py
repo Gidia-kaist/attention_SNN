@@ -151,7 +151,6 @@ class Connection(AbstractConnection):
         :param float norm: Total weight per target neuron normalization constant.
         """
         super().__init__(source, target, nu, reduction, weight_decay, **kwargs)
-
         w = kwargs.get("w", None)
         if w is None:
             if self.wmin == -np.inf or self.wmax == np.inf:

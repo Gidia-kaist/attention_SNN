@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="gidia@143.248.115.182:22">
+  <component name="PublishConfigData" autoUpload="Always" serverName="gidia@143.248.115.182:22" showEqualInSync="true">
     <serverData>
       <paths name="gidia@143.248.115.182:22">
         <serverdata>
           <mappings>
-            <mapping deploy="/rnn_road" local="$PROJECT_DIR$" web="" />
+            <mapping deploy="/attention_SNN" local="$PROJECT_DIR$" web="" />
           </mappings>
         </serverdata>
       </paths>

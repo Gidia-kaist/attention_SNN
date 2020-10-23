@@ -189,23 +189,36 @@ for epoch in range(n_epochs):
         if attention is 1:
             batch["encoded_image"] = batch["encoded_image"].permute(1, 0, 2, 3)
             input_dataset = batch["encoded_image"].squeeze(1)
+            print(input_dataset[0].sum()/32)
+            ####여기가 문제#######################
             for b in range(batch_size):
                 weight_matrix = network.connections[("X", "Ae")].w.cpu()
                 query = input_dataset[b].view(1, 784)
+                query_sum = query.sum()/784
+                print(query_sum)
                 index = torch.argmax(torch.matmul(query, weight_matrix))
                 softmax = torch.nn.Softmax(dim=1)
                 attention_score = softmax(torch.mul(query, weight_matrix[:, index]))
                 input_dataset[b] = (torch.round(torch.mul(query, attention_score)*10**4)/10**4).reshape(28, 28)
             batch["encoded_image"] = input_dataset.unsqueeze(1)
+            ####여기가 문제#######################
+            print(input_dataset[0].sum()/32)
             a = poisson(batch["encoded_image"][0], time=time, dt=dt).unsqueeze(0)
             for i in range(batch_size - 1):
                 temp = poisson(batch["encoded_image"][i + 1], time=time, dt=dt).unsqueeze(0)
                 a = torch.cat((a, temp))
             a = a.permute(1, 0, 2, 3, 4)
             inputs = {"X": a}
+            #print(inputs["X"].sum()/32)
         else:
-            inputs = {"X": batch["encoded_image"]}
-
+            batch["encoded_image"] = batch["encoded_image"].permute(1, 0, 2, 3)
+            a = poisson(batch["encoded_image"][0], time=time, dt=dt).unsqueeze(0)
+            for i in range(batch_size - 1):
+                temp = poisson(batch["encoded_image"][i + 1], time=time, dt=dt).unsqueeze(0)
+                a = torch.cat((a, temp))
+            a = a.permute(1, 0, 2, 3, 4)
+            inputs = {"X": a}
+            print(inputs["X"].sum()/32)
         if gpu:
             inputs = {k: v.cuda() for k, v in inputs.items()}
 
