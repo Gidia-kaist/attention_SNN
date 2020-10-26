@@ -25,18 +25,19 @@ from bindsnet.analysis.plotting import (
     plot_voltages,
 )
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=0)
 parser.add_argument("--n_neurons", type=int, default=200)
 parser.add_argument("--batch_size", type=int, default=32)
-parser.add_argument("--n_epochs", type=int, default=1)
+parser.add_argument("--n_epochs", type=int, default=100)
 parser.add_argument("--n_test", type=int, default=10000)
 parser.add_argument("--n_workers", type=int, default=-1)
-parser.add_argument("--update_steps", type=int, default=256)
+parser.add_argument("--update_steps", type=int, default=10)
 parser.add_argument("--exc", type=float, default=22.5)
 parser.add_argument("--inh", type=float, default=120)
 parser.add_argument("--theta_plus", type=float, default=0.05)
-parser.add_argument("--time", type=int, default=200)
+parser.add_argument("--time", type=int, default=100)
 parser.add_argument("--dt", type=int, default=1.0)
 parser.add_argument("--intensity", type=float, default=128)
 parser.add_argument("--progress_interval", type=int, default=10)
@@ -44,8 +45,8 @@ parser.add_argument("--train", dest="train", action="store_true")
 parser.add_argument("--test", dest="train", action="store_false")
 parser.add_argument("--plot", dest="plot", action="store_true")
 parser.add_argument("--gpu", dest="gpu", action="store_true")
-parser.add_argument("--attention", type=int, default=1)
-parser.set_defaults(plot=False, gpu=True, train=True)
+parser.add_argument("--attention", type=int, default=0)
+parser.set_defaults(plot=True, gpu=False, train=True)
 
 args = parser.parse_args()
 
@@ -70,7 +71,7 @@ attention = args.attention
 
 update_interval = update_steps * batch_size
 print("using attention : ", attention)
-
+count = 0
 
 # Sets up Gpu use
 if gpu and torch.cuda.is_available():
@@ -189,40 +190,35 @@ for epoch in range(n_epochs):
         if attention is 1:
             batch["encoded_image"] = batch["encoded_image"].permute(1, 0, 2, 3)
             input_dataset = batch["encoded_image"].squeeze(1)
-            print(input_dataset[0].sum()/32)
+            #print(input_dataset[0].sum()/32)
             ####여기가 문제#######################
             for b in range(batch_size):
                 weight_matrix = network.connections[("X", "Ae")].w.cpu()
                 query = input_dataset[b].view(1, 784)
                 query_sum = query.sum()/784
-                print(query_sum)
+                #print(query_sum)
                 index = torch.argmax(torch.matmul(query, weight_matrix))
                 softmax = torch.nn.Softmax(dim=1)
                 attention_score = softmax(torch.mul(query, weight_matrix[:, index]))
                 input_dataset[b] = (torch.round(torch.mul(query, attention_score)*10**4)/10**4).reshape(28, 28)
             batch["encoded_image"] = input_dataset.unsqueeze(1)
             ####여기가 문제#######################
-            print(input_dataset[0].sum()/32)
+            #print(input_dataset[0].sum()/32)
             a = poisson(batch["encoded_image"][0], time=time, dt=dt).unsqueeze(0)
             for i in range(batch_size - 1):
                 temp = poisson(batch["encoded_image"][i + 1], time=time, dt=dt).unsqueeze(0)
                 a = torch.cat((a, temp))
-            a = a.permute(1, 0, 2, 3, 4)
+            a = a.permute(1, 0, 2, 3, 4)*200
             inputs = {"X": a}
             #print(inputs["X"].sum()/32)
         else:
-            batch["encoded_image"] = batch["encoded_image"].permute(1, 0, 2, 3)
-            a = poisson(batch["encoded_image"][0], time=time, dt=dt).unsqueeze(0)
-            for i in range(batch_size - 1):
-                temp = poisson(batch["encoded_image"][i + 1], time=time, dt=dt).unsqueeze(0)
-                a = torch.cat((a, temp))
-            a = a.permute(1, 0, 2, 3, 4)
-            inputs = {"X": a}
-            print(inputs["X"].sum()/32)
+            inputs = {"X": batch["encoded_image"]}
+            #print(inputs["X"].sum()/32)
         if gpu:
             inputs = {k: v.cuda() for k, v in inputs.items()}
 
         if step % update_steps == 0 and step > 0:
+
             # Convert the array of labels into a tensor
             label_tensor = torch.tensor(labels)
 
@@ -295,12 +291,15 @@ for epoch in range(n_epochs):
 
         # Optionally plot various simulation information.
         if plot:
-            image = batch["image"][:, 0].view(28, 28)
-            inpt = inputs["X"][:, 0].view(time, 784).sum(0).view(28, 28)
+            #image = batch["image"][:, 0].view(28, 28)
+            #inpt = inputs["X"][:, 0].view(time, 784).sum(0).view(28, 28)
+
             input_exc_weights = network.connections[("X", "Ae")].w
+
             square_weights = get_square_weights(
                 input_exc_weights.view(784, n_neurons), n_sqrt, 28
             )
+            '''
             square_assignments = get_square_assignments(assignments, n_sqrt)
             spikes_ = {
                 layer: spikes[layer].get("s")[:, 0].contiguous() for layer in spikes
@@ -311,7 +310,11 @@ for epoch in range(n_epochs):
                 image, inpt, label=labels[step], axes=inpt_axes, ims=inpt_ims
             )
             spike_ims, spike_axes = plot_spikes(spikes_, ims=spike_ims, axes=spike_axes)
-            weights_im = plot_weights(square_weights, im=weights_im)
+            '''
+            if step % update_steps == 0 and step > 0:
+                weights_im = plot_weights(square_weights, im=weights_im, count=count, save="True")
+                count += 1
+            '''
             assigns_im = plot_assignments(square_assignments, im=assigns_im)
             perf_ax = plot_performance(
                 accuracy, ax=perf_ax
@@ -319,13 +322,14 @@ for epoch in range(n_epochs):
             voltage_ims, voltage_axes = plot_voltages(
                 voltages, ims=voltage_ims, axes=voltage_axes, plot_type="line"
             )
+            '''
+
 
             plt.pause(1e-8)
 
         network.reset_state_variables()  # Reset state variables.
 
-        if step % update_steps == 0 and step > 0:
-            break
+
 
 print("Progress: %d / %d (%.4f seconds)" % (epoch + 1, n_epochs, t() - start))
 print("Training complete.\n")
@@ -358,7 +362,12 @@ accuracy = {"all": 0, "proportion": 0}
 
 # Train the network.
 print("\nBegin testing\n")
+
 network.train(mode=False)
+
+if gpu:
+    network.to("cuda")
+
 start = t()
 
 for step, batch in enumerate(tqdm(test_dataloader)):

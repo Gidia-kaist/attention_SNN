@@ -1,3 +1,4 @@
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,10 +9,11 @@ from torch.nn.modules.utils import _pair
 from matplotlib.collections import PathCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from typing import Tuple, List, Optional, Sized, Dict, Union
-
+from datetime import datetime
 from ..utils import reshape_locally_connected_weights, reshape_conv2d_weights
 
 plt.ion()
+now = datetime.now()
 
 
 def plot_input(
@@ -182,11 +184,13 @@ def plot_weights(
     figsize: Tuple[int, int] = (5, 5),
     cmap: str = "hot_r",
     save: Optional[str] = None,
+    count: int = 0,
 ) -> AxesImage:
     # language=rst
     """
     Plot a connection weight matrix.
 
+    :param count: Image #
     :param weights: Weight matrix of ``Connection`` object.
     :param wmin: Minimum allowed weight value.
     :param wmax: Maximum allowed weight value.
@@ -198,6 +202,7 @@ def plot_weights(
     """
     local_weights = weights.detach().clone().cpu().numpy()
     if save is not None:
+
         plt.ioff()
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -212,19 +217,11 @@ def plot_weights(
 
         plt.colorbar(im, cax=cax)
         fig.tight_layout()
+        fig.savefig('/home/gidia/anaconda3/envs/myenv/projects/attention_SNN/results/imgs/' + str(now.year) + '_' + str(
+            now.month) + '_' + str(now.day) + '_' + str(now.hour) + '_' + str(now.minute) + '_img_' + str(
+            count) + '.png')
 
-        a = save.split(".")
-        if len(a) == 2:
-            save = a[0] + ".1." + a[1]
-        else:
-            a[1] = "." + str(1 + int(a[1])) + ".png"
-            save = a[0] + a[1]
-
-        plt.savefig(save, bbox_inches="tight")
-
-        plt.close(fig)
-        plt.ion()
-        return im, save
+        return im
     else:
         if not im:
             fig, ax = plt.subplots(figsize=figsize)
