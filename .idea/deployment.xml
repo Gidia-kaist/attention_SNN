@@ -1,18 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="gidia@143.248.115.182:22" showEqualInSync="true">
+  <component name="PublishConfigData" autoUpload="Always" serverName="gidia@143.248.115.182:22" autoUploadExternalChanges="true" showEqualInSync="true">
     <serverData>
       <paths name="gidia@143.248.115.182:22">
         <serverdata>
           <mappings>
-            <mapping deploy="/attention_SNN" local="$PROJECT_DIR$" web="" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="gidia@143.248.115.182:22 (1)">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/attention_SNN" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
